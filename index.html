@@ -451,6 +451,50 @@
             border-color: rgba(255, 95, 95, 0.35);
         }
 
+        .formatting-bar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            background-color: var(--bg-sidebar);
+            border-bottom: 1px solid var(--border-color);
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+        }
+
+        .formatting-bar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .format-btn {
+            background-color: var(--bg-editor);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            min-width: 32px;
+            height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-weight: 600;
+            transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+        }
+
+        .format-btn.active {
+            background-color: var(--accent-color);
+            border-color: var(--accent-color);
+            color: #ffffff;
+        }
+
+        .format-btn:active {
+            opacity: 0.8;
+        }
+
         .editor-subbar {
             padding: 10px 16px;
             border-bottom: 1px solid var(--border-color);
@@ -718,6 +762,17 @@
                 </div>
             </header>
 
+            <div class="formatting-bar">
+                <button class="format-btn" data-command="bold" title="Pogrubienie"><b>B</b></button>
+                <button class="format-btn" data-command="italic" title="Kursywa"><i>I</i></button>
+                <button class="format-btn" data-command="underline" title="Podkreślenie"><u>U</u></button>
+                <button class="format-btn" data-command="strikeThrough" title="Przekreślenie"><s>S</s></button>
+                <button class="format-btn" data-command="insertList" title="Lista punktowana">• Lista</button>
+                <button class="format-btn" data-command="justifyLeft" title="Wyrównaj do lewej">L</button>
+                <button class="format-btn" data-command="justifyCenter" title="Wyśrodkuj">C</button>
+                <button class="format-btn" data-command="justifyRight" title="Wyrównaj do prawej">P</button>
+            </div>
+
             <div class="editor-subbar">
                 <select class="category-select" id="categorySelect" aria-label="Wybierz kategorię"></select>
                 <span class="last-edited-text" id="lastEditedText">Teraz</span>
@@ -806,7 +861,7 @@
             {
                 id: 'note-1',
                 title: 'Witaj w notatniku',
-                body: 'Miło Cię widzieć! 👋 Możesz tu bezpiecznie zapisywać swoje myśli, tworzyć kategorie i wklejać zdjęcia w dowolnym miejscu. Ciesz się wygodnym pisaniem!',
+                body: 'Miło Cię widzieć! 👋 Możesz tu teraz <b>pogrubiać tekst</b>, stosować <i>kursywę</i>, <u>podkreślenia</u> oraz wklejać zdjęcia w dowolnym miejscu!',
                 category: 'Pomysły',
                 pinned: true,
                 deleted: false,
@@ -897,6 +952,55 @@
         const exportJsonBtn = document.getElementById('exportJsonBtn');
         const importJsonBtn = document.getElementById('importJsonBtn');
         const importFileInput = document.getElementById('importFileInput');
+
+        function updateFormattingButtonsState() {
+            document.querySelectorAll('.format-btn').forEach(btn => {
+                const command = btn.getAttribute('data-command');
+                if (command === 'insertList') return;
+                try {
+                    if (document.queryCommandState(command)) {
+                        btn.classList.add('active');
+                    } else {
+                        btn.classList.remove('active');
+                    }
+                } catch (e) {}
+            });
+        }
+
+        // Obsługa kliknięć w przyciski formatowania
+        document.querySelectorAll('.format-btn').forEach(btn => {
+            btn.onclick = (e) => {
+                e.preventDefault();
+                const command = btn.getAttribute('data-command');
+                
+                if (command === 'insertList') {
+                    // Wstawianie kropki punktnika w miejscu kursora
+                    const selection = window.getSelection();
+                    if (selection.rangeCount > 0) {
+                        const range = selection.getRangeAt(0);
+                        range.deleteContents();
+                        const textNode = document.createTextNode('• ');
+                        range.insertNode(textNode);
+                        range.setStartAfter(textNode);
+                        range.collapse(true);
+                        selection.removeAllRanges();
+                        selection.addRange(range);
+                    } else {
+                        noteBodyEditable.innerHTML += '• ';
+                    }
+                } else {
+                    document.execCommand(command, false, null);
+                }
+
+                noteBodyEditable.focus();
+                updateFormattingButtonsState();
+                triggerNoteSave();
+            };
+        });
+
+        noteBodyEditable.onkeyup = updateFormattingButtonsState;
+        noteBodyEditable.onmouseup = updateFormattingButtonsState;
+        noteBodyEditable.ontouchend = updateFormattingButtonsState;
 
         function getCategoryColor(catName) {
             const found = categories.find(c => c.name === catName);
@@ -1300,6 +1404,7 @@
             pinBtn.textContent = note.pinned ? 'Odepnij' : 'Przypnij';
             pinBtn.classList.toggle('pinned-active', note.pinned);
             renderCategories();
+            updateFormattingButtonsState();
         }
 
         function escapeHtml(str) {
@@ -1340,6 +1445,7 @@
 
         noteBodyEditable.oninput = () => {
             triggerNoteSave();
+            updateFormattingButtonsState();
         };
 
         noteBodyEditable.onpaste = (e) => {
